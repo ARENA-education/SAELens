@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v6.50.1 (2026-09-11)
+
+### Fix
+
+* fix: preserve sequence starts at batch boundaries (#733)
+
+* fix: preserve sequence starts at batch boundaries
+
+* fix: track pending sequence starts without tensor reads
+
+* test: cover separator-at-batch-boundary and empty sequence with context_size=1
+
+Co-Authored-By: Claude Fable 5.1 &lt;noreply@anthropic.com&gt;
+Claude-Session: https://claude.ai/code/session_01PsKcgMM4SeKZdZ17FkL1da
+
+---------
+
+Co-authored-by: David Chanin &lt;chanindav@gmail.com&gt;
+Co-authored-by: Claude Fable 5.1 &lt;noreply@anthropic.com&gt; ([`964025a`](https://github.com/decoderesearch/SAELens/commit/964025a2bc492af955327eacc9eaa41d9642afdc))
+
 ## v6.50.0 (2026-08-30)
 
 ### Feature
