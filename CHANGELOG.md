@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v6.51.0 (2026-09-11)
+
+### Feature
+
+* feat: add quadratic sparcity loss from GemmaScope 2 for JumpReluSAE (#732) ([`49261ae`](https://github.com/decoderesearch/SAELens/commit/49261ae63245858452dc9bb6c982b6ed83556cfa))
+
+### Fix
+
+* fix: load trainer state onto the configured device (#731)
+
+* fix: load trainer state onto the configured device
+
+* test: build the checkpointing helper&#39;s SAE as StandardTrainingSAE ([`2f4ff8c`](https://github.com/decoderesearch/SAELens/commit/2f4ff8c803e535ed011969b4a449535992a32e04))
+
 ## v6.50.1 (2026-09-11)
 
 ### Fix
