@@ -147,7 +147,7 @@ sparse_autoencoder = LanguageModelSAETrainingRunner(cfg).run()
 
 [JumpReLU SAEs](https://arxiv.org/abs/2407.14435) are a state-of-the-art SAE architecture. To train one, provide a `JumpReLUTrainingSAEConfig` to the `sae` field. JumpReLU SAEs use a sparsity penalty controlled by the `l0_coefficient` parameter. The `JumpReLUTrainingSAEConfig` also has parameters `jumprelu_bandwidth` and `jumprelu_init_threshold` which affect the learning of the thresholds.
 
-We support both the original JumpReLU sparsity loss and the more modern [tanh sparsity loss](https://transformer-circuits.pub/2025/january-update/index.html) variant from Anthropic. To use the tanh sparsity loss, set `jumprelu_sparsity_loss_mode="tanh"`. The tanh sparsity loss variant is a bit easier to train, but has more hyperparameters. We recommend using the tanh with `normalize_activations="expected_average_only_in"` to match Anthropic's setup. We also recommend enabling the pre-act loss by setting `pre_act_loss_coefficient` to match Anthropic's setup. An example of this is below:
+We support the original JumpReLU sparsity loss, the more modern [tanh sparsity loss](https://transformer-circuits.pub/2025/january-update/index.html) variant from Anthropic, and the [quadratic L0 loss](https://storage.googleapis.com/deepmind-media/DeepMind.com/Blog/gemma-scope-2-helping-the-ai-safety-community-deepen-understanding-of-complex-language-model-behavior/Gemma_Scope_2_Technical_Paper.pdf) from Gemma Scope 2. To use the tanh sparsity loss, set `jumprelu_sparsity_loss_mode="tanh"`. The tanh sparsity loss variant is a bit easier to train, but has more hyperparameters. We recommend using the tanh with `normalize_activations="expected_average_only_in"` to match Anthropic's setup. We also recommend enabling the pre-act loss by setting `pre_act_loss_coefficient` to match Anthropic's setup. An example of this is below:
 
 ```python
 from sae_lens import LanguageModelSAERunnerConfig, LanguageModelSAETrainingRunner, JumpReLUTrainingSAEConfig
@@ -185,6 +185,29 @@ cfg = LanguageModelSAERunnerConfig( # Full config would be defined here
     # ... other LanguageModelSAERunnerConfig parameters ...
     sae=JumpReLUTrainingSAEConfig(
         l0_coefficient=5.0, # Sparsity penalty coefficient
+        jumprelu_bandwidth=0.01,
+        jumprelu_init_threshold=0.01,
+        d_in=1024, # must match your hook point
+        d_sae=16 * 1024,
+        normalize_activations="expected_average_only_in",
+        # ... other common SAE parameters from SAEConfig ...
+    ),
+    # ...
+)
+sparse_autoencoder = LanguageModelSAETrainingRunner(cfg).run()
+```
+
+The quadratic L0 loss from [Gemma Scope 2](https://storage.googleapis.com/deepmind-media/DeepMind.com/Blog/gemma-scope-2-helping-the-ai-safety-community-deepen-understanding-of-complex-language-model-behavior/Gemma_Scope_2_Technical_Paper.pdf) replaces the linear L0 penalty with a penalty on the squared distance between the SAE's L0 and a target value. This pushes the SAE towards a specific L0 rather than simply as low an L0 as possible, so `l0_coefficient` controls how strongly the SAE is pulled towards the target instead of setting the sparsity level directly. To use it, set `jumprelu_sparsity_loss_mode="quadratic"` and set `target_l0` to the desired number of active latents. `target_l0` has no default and must be set explicitly in this mode. Like the step loss, this uses the straight-through estimator for L0, so the same advice about `jumprelu_bandwidth` and `jumprelu_init_threshold` applies.
+
+```python
+from sae_lens import LanguageModelSAERunnerConfig, LanguageModelSAETrainingRunner, JumpReLUTrainingSAEConfig
+
+cfg = LanguageModelSAERunnerConfig( # Full config would be defined here
+    # ... other LanguageModelSAERunnerConfig parameters ...
+    sae=JumpReLUTrainingSAEConfig(
+        jumprelu_sparsity_loss_mode="quadratic",
+        target_l0=30, # desired number of active latents
+        l0_coefficient=5.0, # how strongly to pull L0 towards the target
         jumprelu_bandwidth=0.01,
         jumprelu_init_threshold=0.01,
         d_in=1024, # must match your hook point

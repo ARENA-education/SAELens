@@ -383,6 +383,158 @@ def test_JumpReLUTrainingSAE_forward_tanh_sparsity_with_pre_act_loss():
     assert train_step_output.losses["pre_act_loss"] >= 0.0
 
 
+def test_JumpReLUTrainingSAE_quadratic_requires_target_l0():
+    cfg = build_jumprelu_sae_training_cfg(jumprelu_sparsity_loss_mode="quadratic")
+
+    with pytest.raises(ValueError, match="target_l0 must be set"):
+        JumpReLUTrainingSAE(cfg)
+
+
+def test_JumpReLUTrainingSAE_non_quadratic_modes_do_not_require_target_l0():
+    for mode in ("step", "tanh"):
+        cfg = build_jumprelu_sae_training_cfg(jumprelu_sparsity_loss_mode=mode)
+        sae = JumpReLUTrainingSAE(cfg)
+        assert sae.cfg.target_l0 is None
+
+
+@pytest.mark.parametrize("target_l0", [-1, 0])
+def test_JumpReLUTrainingSAE_quadratic_rejects_non_positive_target_l0(
+    target_l0: float,
+):
+    cfg = build_jumprelu_sae_training_cfg(
+        jumprelu_sparsity_loss_mode="quadratic",
+        target_l0=target_l0,
+    )
+
+    with pytest.raises(ValueError):
+        JumpReLUTrainingSAE(cfg)
+
+
+def test_JumpReLUTrainingSAE_quadratic_rejects_target_l0_greater_than_d_sae():
+    cfg = build_jumprelu_sae_training_cfg(
+        d_sae=32,
+        jumprelu_sparsity_loss_mode="quadratic",
+        target_l0=33,
+    )
+
+    with pytest.raises(ValueError):
+        JumpReLUTrainingSAE(cfg)
+
+
+@pytest.mark.parametrize("target_l0", [1, 16, 32])
+def test_JumpReLUTrainingSAE_quadratic_accepts_valid_target_l0(target_l0: float):
+    cfg = build_jumprelu_sae_training_cfg(
+        d_sae=32,
+        jumprelu_sparsity_loss_mode="quadratic",
+        target_l0=target_l0,
+    )
+
+    sae = JumpReLUTrainingSAE(cfg)
+
+    assert sae.cfg.target_l0 == target_l0
+
+
+def test_JumpReLUTrainingSAE_quadratic_l0_loss_is_zero_at_target():
+    cfg = build_jumprelu_sae_training_cfg(
+        d_in=2,
+        d_sae=4,
+        jumprelu_sparsity_loss_mode="quadratic",
+        target_l0=2,
+        l0_coefficient=1.0,
+    )
+    sae = JumpReLUTrainingSAE(cfg)
+
+    sae.W_enc.data = torch.tensor(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+        ]
+    )
+    sae.b_enc.data.zero_()
+    sae.threshold.data.fill_(0.5)
+
+    output = sae.training_forward_pass(
+        step_input=TrainStepInput(
+            sae_in=torch.ones(1, 2),
+            coefficients={"l0": 1.0},
+            dead_neuron_mask=None,
+            n_training_steps=0,
+            is_logging_step=False,
+        ),
+    )
+
+    actual_l0 = (output.feature_acts != 0).sum(dim=-1)
+    assert_close(actual_l0, torch.tensor([2]))
+    assert_close(output.losses["l0_loss"], torch.tensor(0.0))
+
+
+@pytest.mark.parametrize(
+    ("target_l0", "expected_sign"),
+    [
+        (1, 1),  # actual l0 = 2 > target -> positive gradient
+        (2, 0),  # actual l0 = 2 == target -> zero gradient
+        (3, -1),  # actual l0 = 2 < target -> negative gradient
+    ],
+)
+def test_JumpReLUTrainingSAE_quadratic_l0_loss_has_expected_gradient_direction(
+    target_l0: float,
+    expected_sign: int,
+):
+    sae = JumpReLUTrainingSAE(
+        build_jumprelu_sae_training_cfg(
+            d_in=2,
+            d_sae=3,
+            target_l0=target_l0,
+            jumprelu_sparsity_loss_mode="quadratic",
+            jumprelu_bandwidth=1.0,
+            jumprelu_init_threshold=1.0,
+            jumprelu_ste_to_input=True,
+        )
+    )
+
+    x = torch.ones(1, 2)
+
+    # hidden_pre = [1.2, 1.2, 0.8]
+    # => actual l0 = 2
+    # All three latents are inside the STE window (0.5, 1.5).
+    sae.W_enc.data = torch.tensor(
+        [
+            [0.6, 0.6, 0.4],
+            [0.6, 0.6, 0.4],
+        ]
+    )
+    sae.b_enc.data.zero_()
+
+    feature_acts, hidden_pre = sae.encode_with_hidden_pre(x)
+
+    assert_close(hidden_pre, torch.tensor([[1.2, 1.2, 0.8]]))
+    assert_close(feature_acts, torch.tensor([[1.2, 1.2, 0.0]]))
+
+    losses = sae.calculate_aux_loss(
+        step_input=TrainStepInput(
+            sae_in=x,
+            coefficients={"l0": 1.0},
+            dead_neuron_mask=None,
+            n_training_steps=0,
+            is_logging_step=False,
+        ),
+        feature_acts=feature_acts,
+        hidden_pre=hidden_pre,
+        sae_out=torch.zeros_like(x),
+    )
+
+    losses["l0_loss"].backward()
+
+    assert sae.W_enc.grad is not None
+
+    if expected_sign > 0:
+        assert torch.all(sae.W_enc.grad > 0)
+    elif expected_sign < 0:
+        assert torch.all(sae.W_enc.grad < 0)
+    else:
+        assert_close(sae.W_enc.grad, torch.zeros_like(sae.W_enc.grad))
+
+
 def test_JumpReLUTrainingSAE_tanh_scale_increases_l0_loss():
     """Test that increasing jumprelu_tanh_scale increases l0_loss for tanh sparsity mode."""
     batch_size = 4

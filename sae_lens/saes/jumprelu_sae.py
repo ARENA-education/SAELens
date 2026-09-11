@@ -198,18 +198,19 @@ class JumpReLUTrainingSAEConfig(TrainingSAEConfig):
     Args:
         jumprelu_init_threshold: initial threshold for the JumpReLU activation
         jumprelu_bandwidth: bandwidth for the JumpReLU activation
-        jumprelu_sparsity_loss_mode: mode for the sparsity loss, either "step" or "tanh". "step" is Google Deepmind's L0 loss, "tanh" is Anthropic's sparsity loss.
+        jumprelu_sparsity_loss_mode: mode for the sparsity loss, either "step" or "tanh" or "quadratic". "step" is Google Deepmind's L0 loss, "tanh" is Anthropic's sparsity loss, "quadratic" is Google Deepmind (GemmaScope2).
         l0_coefficient: coefficient for the l0 sparsity loss
         l0_warm_up_steps: number of warm-up steps for the l0 sparsity loss
         pre_act_loss_coefficient: coefficient for the pre-activation loss. Set to None to disable. Set to 3e-6 to match Anthropic's setup.
         jumprelu_tanh_scale: scale for the tanh sparsity loss. Only relevant for "tanh" sparsity loss mode.
         jumprelu_ste_to_input: whether the straight-through estimator also passes gradient to the pre-activations, and so to the encoder, rather than to the threshold alone. False matches DeepMind's JumpReLU, True matches Anthropic's setup.
+        target_l0: target number of active latents for the quadratic sparsity loss. Must be set when using "quadratic" sparsity loss mode, and is ignored otherwise.
     """
 
     jumprelu_init_threshold: float = 0.01
     jumprelu_bandwidth: float = 0.05
-    # step is Google Deepmind, tanh is Anthropic
-    jumprelu_sparsity_loss_mode: Literal["step", "tanh"] = "step"
+    # step is Google Deepmind, tanh is Anthropic, quadratic is Google Deepmind (GemmaScope2)
+    jumprelu_sparsity_loss_mode: Literal["step", "tanh", "quadratic"] = "step"
     l0_coefficient: float = 1.0
     l0_warm_up_steps: int = 0
 
@@ -221,6 +222,9 @@ class JumpReLUTrainingSAEConfig(TrainingSAEConfig):
 
     # Anthropic passes the STE gradient to all model params, DeepMind only to the threshold
     jumprelu_ste_to_input: bool = False
+
+    # must be set for quadratic sparsity loss mode
+    target_l0: float | None = None
 
     @override
     @classmethod
@@ -256,6 +260,7 @@ class JumpReLUTrainingSAE(TrainingSAE[JumpReLUTrainingSAEConfig]):
 
     def __init__(self, cfg: JumpReLUTrainingSAEConfig, use_error_term: bool = False):
         super().__init__(cfg, use_error_term)
+        _validate_jumprelu_config(cfg)
 
         # We'll store a bandwidth for the training approach, if needed
         self.bandwidth = cfg.jumprelu_bandwidth
@@ -332,7 +337,7 @@ class JumpReLUTrainingSAE(TrainingSAE[JumpReLUTrainingSAEConfig]):
 
         threshold = self.threshold.to(hidden_pre.dtype)
         W_dec_norm = self.W_dec.norm(dim=1)
-        if self.cfg.jumprelu_sparsity_loss_mode == "step":
+        if self.cfg.jumprelu_sparsity_loss_mode in ("step", "quadratic"):
             l0 = torch.sum(
                 Step.apply(  # type: ignore
                     hidden_pre,
@@ -342,7 +347,17 @@ class JumpReLUTrainingSAE(TrainingSAE[JumpReLUTrainingSAEConfig]):
                 ),
                 dim=-1,
             )
-            l0_loss = (step_input.coefficients["l0"] * l0).mean()
+            if self.cfg.jumprelu_sparsity_loss_mode == "quadratic":
+                # Gemma Scope 2 quadratic penalty around a target L0
+                target_l0 = self.cfg.target_l0
+                if target_l0 is None:
+                    raise ValueError(
+                        "cfg.target_l0 must be set for quadratic sparsity loss mode."
+                    )
+                per_item_l0_loss = 2 / target_l0 * (l0 - target_l0) ** 2
+            else:
+                per_item_l0_loss = l0
+            l0_loss = (step_input.coefficients["l0"] * per_item_l0_loss).mean()
         elif self.cfg.jumprelu_sparsity_loss_mode == "tanh":
             per_item_l0_loss = torch.tanh(
                 self.cfg.jumprelu_tanh_scale * feature_acts * W_dec_norm
@@ -414,3 +429,18 @@ def calculate_pre_act_loss(
         (threshold - hidden_pre).relu() * dead_neuron_mask * W_dec_norm
     ).sum(dim=-1)
     return pre_act_loss_coefficient * per_item_loss.mean()
+
+
+def _validate_jumprelu_config(cfg: JumpReLUTrainingSAEConfig) -> None:
+    if cfg.jumprelu_sparsity_loss_mode == "quadratic":
+        if cfg.target_l0 is None:
+            raise ValueError(
+                "cfg.target_l0 must be set for quadratic sparsity loss mode."
+            )
+        if cfg.target_l0 <= 0:
+            raise ValueError("cfg.target_l0 must be greater than 0.")
+        if cfg.target_l0 > cfg.d_sae:
+            raise ValueError(
+                f"cfg.target_l0 must be less than or equal to cfg.d_sae "
+                f"({cfg.d_sae}), got {cfg.target_l0}."
+            )
