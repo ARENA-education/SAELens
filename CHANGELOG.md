@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v6.51.1 (2026-09-18)
+
+### Fix
+
+* fix: Validate positive Matryoshka widths (#734) ([`8b4af5a`](https://github.com/decoderesearch/SAELens/commit/8b4af5a08f87ddf34c09eb36455aa1718d62e8bc))
+
 ## v6.51.0 (2026-09-11)
 
 ### Feature
