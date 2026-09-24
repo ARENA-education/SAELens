@@ -183,7 +183,9 @@ class HookedSAETransformer(HookedTransformer):
         super().__init__(*model_args, **model_kwargs)
 
         for block in self.blocks:
-            add_hook_in_to_mlp(block.mlp)  # type: ignore
+            # attn-only models have no MLP
+            if hasattr(block, "mlp"):
+                add_hook_in_to_mlp(block.mlp)  # type: ignore
         self.setup()
 
         self._acts_to_saes: dict[str, _SAEWrapper] = {}

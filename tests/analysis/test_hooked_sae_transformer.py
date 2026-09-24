@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-from transformer_lens import HookedTransformer
+from transformer_lens import HookedTransformer, HookedTransformerConfig
 from transformer_lens.ActivationCache import ActivationCache
 from transformer_lens.hook_points import HookPoint  # Hooking utilities
 from transformer_lens.HookedTransformer import Loss
@@ -791,6 +791,16 @@ def test_HookedSAETransformer_adds_hook_in_to_mlp():
     for n in range(model.cfg.n_layers):
         assert f"blocks.{n}.mlp.hook_in" in cache
         assert cache[f"blocks.{n}.mlp.hook_in"].shape == (1, 4, 768)
+
+
+def test_HookedSAETransformer_works_with_attn_only_models():
+    cfg = HookedTransformerConfig(
+        n_layers=2, d_model=16, n_ctx=8, d_head=4, d_vocab=50, attn_only=True
+    )
+    model = HookedSAETransformer(cfg)
+    tokens = torch.randint(0, cfg.d_vocab, (1, 5))
+    _, cache = model.run_with_cache(tokens)
+    assert not any(name.endswith("mlp.hook_in") for name in cache)
 
 
 # ============================================================================
