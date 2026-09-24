@@ -10,6 +10,7 @@ import pytest
 import torch
 import wandb
 
+from sae_lens.analysis.compat import has_hooked_transformer
 from sae_lens.saes.sae import SAE
 from sae_lens.saes.standard_sae import StandardSAEConfig
 from tests.helpers import TINYSTORIES_MODEL, load_model_cached
@@ -46,6 +47,8 @@ def reproducibility():
 
 @pytest.fixture
 def ts_model():
+    if not has_hooked_transformer():
+        pytest.skip("HookedTransformer was removed in transformer-lens 4.0")
     return load_model_cached(TINYSTORIES_MODEL)
 
 

@@ -3,10 +3,17 @@ from typing import Any
 import pytest
 import torch
 from datasets import Dataset
-from transformer_lens import HookedTransformer
 
+from sae_lens.analysis.compat import has_hooked_transformer
 from sae_lens.training.activations_store import ActivationsStore
 from tests.helpers import TINYSTORIES_MODEL, assert_close, load_model_cached
+
+if not has_hooked_transformer():
+    pytest.skip(
+        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
+    )
+
+from transformer_lens import HookedTransformer
 
 
 def _common_kwargs(dataset: Dataset) -> dict[str, Any]:

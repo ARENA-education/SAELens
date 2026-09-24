@@ -6,10 +6,10 @@ from unittest.mock import patch
 import pytest
 import torch
 from datasets import Dataset
-from transformer_lens import HookedTransformer
 from typing_extensions import override
 
 from sae_lens import __version__
+from sae_lens.analysis.compat import has_hooked_transformer
 from sae_lens.config import (
     LanguageModelSAERunnerConfig,
     LoggingConfig,
@@ -37,6 +37,13 @@ from tests.helpers import (
     build_sae_training_cfg,
     load_model_cached,
 )
+
+if not has_hooked_transformer():
+    pytest.skip(
+        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
+    )
+
+from transformer_lens import HookedTransformer
 
 
 @pytest.fixture

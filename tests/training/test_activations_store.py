@@ -8,9 +8,9 @@ import pytest
 import torch
 from datasets import Dataset
 from safetensors.torch import load_file
-from transformer_lens import HookedTransformer
 from transformers import AutoTokenizer
 
+from sae_lens.analysis.compat import has_hooked_transformer
 from sae_lens.config import LanguageModelSAERunnerConfig, PretokenizeRunnerConfig
 from sae_lens.load_model import load_model
 from sae_lens.pretokenize_runner import pretokenize_dataset
@@ -29,6 +29,13 @@ from tests.helpers import (
     build_runner_cfg,
     load_model_cached,
 )
+
+if not has_hooked_transformer():
+    pytest.skip(
+        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
+    )
+
+from transformer_lens import HookedTransformer
 
 
 def hf_to_tokens(

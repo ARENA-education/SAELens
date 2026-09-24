@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 from datasets import Dataset
-from transformer_lens import HookedTransformer
 
+from sae_lens.analysis.compat import has_hooked_transformer
 from sae_lens.config import LanguageModelSAERunnerConfig
 from sae_lens.evals import (
     EvalConfig,
@@ -45,6 +45,13 @@ from tests.helpers import (
     load_model_cached,
     random_params,
 )
+
+if not has_hooked_transformer():
+    pytest.skip(
+        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
+    )
+
+from transformer_lens import HookedTransformer
 
 TRAINER_EVAL_CONFIG = EvalConfig(
     n_eval_reconstruction_batches=10,

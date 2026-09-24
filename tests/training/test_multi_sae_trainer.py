@@ -6,8 +6,8 @@ import pytest
 import torch
 from datasets import Dataset
 from tqdm.auto import tqdm
-from transformer_lens import HookedTransformer
 
+from sae_lens.analysis.compat import has_hooked_transformer
 from sae_lens.config import LoggingConfig, SAETrainerConfig
 from sae_lens.saes.standard_sae import StandardTrainingSAE, StandardTrainingSAEConfig
 from sae_lens.training.activations_store import ActivationsStore
@@ -19,6 +19,13 @@ from tests.helpers import (
     load_model_cached,
     random_params,
 )
+
+if not has_hooked_transformer():
+    pytest.skip(
+        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
+    )
+
+from transformer_lens import HookedTransformer
 
 
 @pytest.fixture
