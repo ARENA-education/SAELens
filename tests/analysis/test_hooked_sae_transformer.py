@@ -795,11 +795,10 @@ def test_HookedSAETransformer_adds_hook_in_to_mlp():
 
 def test_HookedSAETransformer_works_with_attn_only_models():
     cfg = HookedTransformerConfig(
-        n_layers=2, d_model=16, n_ctx=8, d_head=4, d_vocab=50, attn_only=True
+        n_layers=1, d_model=2, n_ctx=2, d_head=1, d_vocab=3, attn_only=True
     )
     model = HookedSAETransformer(cfg)
-    tokens = torch.randint(0, cfg.d_vocab, (1, 5))
-    _, cache = model.run_with_cache(tokens)
+    _, cache = model.run_with_cache(torch.tensor([[0, 1]]))
     assert not any(name.endswith("mlp.hook_in") for name in cache)
 
 
