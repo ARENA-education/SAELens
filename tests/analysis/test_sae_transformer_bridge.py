@@ -20,6 +20,8 @@ if not has_transformer_bridge():
         allow_module_level=True,
     )
 
+from transformer_lens.config import TransformerBridgeConfig
+
 if TYPE_CHECKING or has_hooked_transformer():
     from sae_lens.analysis.hooked_sae_transformer import HookedSAETransformer
 from sae_lens.analysis.sae_transformer_bridge import SAETransformerBridge
@@ -1109,7 +1111,28 @@ def test_hooks_added_by_alias_fire_after_sae_is_removed() -> None:
     for name in (alias, model._resolve_hook_name(alias)):
         fired: list[str] = []
         model.run_with_hooks(
-            PROMPT, fwd_hooks=[(name, lambda x, hook: fired.append(hook.name))]
+            PROMPT, fwd_hooks=[(name, lambda _x, hook: fired.append(hook.name))]
         )
         assert fired, f"hook added via {name!r} didn't fire after the SAE was removed"
     assert_close(model(PROMPT), logits_before)
+
+
+def test_boot_native_returns_sae_transformer_bridge() -> None:
+    cfg = TransformerBridgeConfig(
+        d_model=16,
+        d_head=4,
+        n_heads=4,
+        d_mlp=32,
+        n_layers=1,
+        n_ctx=8,
+        d_vocab=10,
+        act_fn="relu",
+    )
+    model = SAETransformerBridge.boot_native(cfg, device="cpu")
+    assert isinstance(model, SAETransformerBridge)
+    sae = make_sae(model.cfg.d_model, "blocks.0.hook_resid_pre")
+    _, cache = model.run_with_cache_with_saes(torch.tensor([[1, 2, 3]]), saes=[sae])
+    assert_close(
+        cache[model.get_sae_hook_name(sae)],
+        sae.encode(cache[model.get_sae_hook_name(sae, "hook_sae_input")]),
+    )
