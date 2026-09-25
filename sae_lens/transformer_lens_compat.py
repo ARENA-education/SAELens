@@ -1,11 +1,10 @@
 """Imports from transformer-lens whose location differs between supported versions."""
 
-# transformer_lens.HookedTransformer re-exports HookedRootModule in every version
-# before 4.0, while the top-level export only exists from mid-3.x onwards.
 try:
-    from transformer_lens.HookedTransformer import HookedRootModule
-except ImportError:  # transformer-lens >= 4.0 removed the HookedTransformer module
-    from transformer_lens import HookedRootModule  # type: ignore
+    from transformer_lens import HookedRootModule
+except ImportError:
+    # transformer-lens 2.x and early 3.x only export it from hook_points
+    from transformer_lens.hook_points import HookedRootModule  # type: ignore
 
 try:
     from transformer_lens.utilities import (
