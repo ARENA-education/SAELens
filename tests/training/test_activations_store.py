@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import os
 import tempfile
 from collections.abc import Iterable
 from math import ceil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import torch
@@ -28,14 +31,11 @@ from tests.helpers import (
     assert_not_close,
     build_runner_cfg,
     load_model_cached,
+    requires_hooked_transformer,
 )
 
-if not has_hooked_transformer():
-    pytest.skip(
-        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
-    )
-
-from transformer_lens import HookedTransformer
+if TYPE_CHECKING or has_hooked_transformer():
+    from transformer_lens import HookedTransformer
 
 
 def hf_to_tokens(
@@ -234,6 +234,7 @@ def test_activations_store__get_activations__autocast_lm_runs_the_llm_in_bfloat1
     assert_close(autocast_activations, activations, atol=3e-3)
 
 
+@requires_hooked_transformer
 def test_activations_store__get_activations__gives_same_results_with_hf_model_and_tlens_model():
     hf_model = load_model(
         model_class_name="AutoModelForCausalLM",

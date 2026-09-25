@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import torch
@@ -22,12 +24,8 @@ from sae_lens.training.activations_store import ActivationsStore
 from sae_lens.training.multi_sae_trainer import MultiSAETrainer
 from tests.helpers import TINYSTORIES_MODEL, load_model_cached
 
-if not has_hooked_transformer():
-    pytest.skip(
-        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
-    )
-
-from transformer_lens import HookedTransformer
+if TYPE_CHECKING or has_hooked_transformer():
+    from transformer_lens import HookedTransformer
 
 
 @pytest.fixture

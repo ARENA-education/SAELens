@@ -1,4 +1,6 @@
-from typing import Generator
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Generator
 
 import numpy as np
 import pytest
@@ -9,12 +11,8 @@ from sae_lens.training.activation_scaler import ActivationScaler
 from sae_lens.training.activations_store import ActivationsStore
 from tests.helpers import assert_close, build_runner_cfg
 
-if not has_hooked_transformer():
-    pytest.skip(
-        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
-    )
-
-from transformer_lens import HookedTransformer
+if TYPE_CHECKING or has_hooked_transformer():
+    from transformer_lens import HookedTransformer
 
 
 def test_ActivationScaler_scale_without_scaling_factor():

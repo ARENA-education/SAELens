@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 from unittest.mock import patch
 
 import pytest
@@ -38,12 +40,8 @@ from tests.helpers import (
     load_model_cached,
 )
 
-if not has_hooked_transformer():
-    pytest.skip(
-        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
-    )
-
-from transformer_lens import HookedTransformer
+if TYPE_CHECKING or has_hooked_transformer():
+    from transformer_lens import HookedTransformer
 
 
 @pytest.fixture

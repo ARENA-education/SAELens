@@ -637,6 +637,8 @@ def load_model_cached(model_name: str) -> "HookedTransformer":
     helper to avoid unnecessarily loading the same model multiple times.
     NOTE: if the model gets modified in tests this will not work.
     """
+    if not has_hooked_transformer():
+        pytest.skip("HookedTransformer was removed in transformer-lens 4.0")
     if model_name not in MODEL_CACHE:
         MODEL_CACHE[model_name] = HookedTransformer.from_pretrained(
             model_name, device="cpu"

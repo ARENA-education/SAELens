@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import dataclasses
 import math
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import datasets
 import numpy as np
@@ -21,14 +23,14 @@ from sae_lens.constants import DTYPE_MAP
 from sae_lens.load_model import load_model
 from sae_lens.saes.standard_sae import StandardTrainingSAEConfig
 from sae_lens.training.activations_store import ActivationsStore
-from tests.helpers import assert_close
+from tests.helpers import assert_close, requires_hooked_transformer
 
-if not has_hooked_transformer():
-    pytest.skip(
-        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
-    )
+if TYPE_CHECKING or has_hooked_transformer():
+    from transformer_lens import HookedTransformer
 
-from transformer_lens import HookedTransformer
+# CacheActivationsRunner loads the model when it's created, and these tests use the
+# default HookedTransformer model class
+pytestmark = requires_hooked_transformer
 
 
 def _default_cfg(

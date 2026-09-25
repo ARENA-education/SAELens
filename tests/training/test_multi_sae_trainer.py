@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import copy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import torch
@@ -20,12 +22,8 @@ from tests.helpers import (
     random_params,
 )
 
-if not has_hooked_transformer():
-    pytest.skip(
-        "HookedTransformer was removed in transformer-lens 4.0", allow_module_level=True
-    )
-
-from transformer_lens import HookedTransformer
+if TYPE_CHECKING or has_hooked_transformer():
+    from transformer_lens import HookedTransformer
 
 
 @pytest.fixture
