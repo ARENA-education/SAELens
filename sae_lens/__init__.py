@@ -151,10 +151,8 @@ except ImportError:
 
 
 def __getattr__(name: str):
-    # `from sae_lens import X` hides the message of an AttributeError raised here,
-    # so raise ImportError to tell transformer-lens v4 users what to do instead.
     if name == "HookedSAETransformer":
-        raise ImportError(
+        raise AttributeError(
             "HookedSAETransformer requires transformer-lens<4.0, which removed "
             "HookedTransformer. Use SAETransformerBridge instead, or install "
             "transformer-lens<4.0."
