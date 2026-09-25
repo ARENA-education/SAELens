@@ -1072,3 +1072,24 @@ def test_reset_sae_preserves_user_disabled_hook_z_reshaping(
     bridge_model._reset_sae(hook_alias)
 
     assert sae.hook_z_reshaping_mode is False
+
+
+def test_hooks_added_by_alias_fire_after_sae_is_removed() -> None:
+    # With compatibility mode, TransformerLens hook names (e.g. blocks.0.hook_mlp_out) are aliases
+    # for the bridge's HookPoints. Removing an SAE used to install a new, differently-named HookPoint,
+    # so hooks added through the alias afterwards were attached to nothing and silently never fired.
+    model = SAETransformerBridge.boot_transformers(MODEL, device="cpu")
+    model.enable_compatibility_mode(disable_warnings=True)
+    alias = "blocks.0.hook_mlp_out"
+    sae = make_sae(model.cfg.d_model, alias)
+    logits_before = model(PROMPT)
+
+    model.run_with_saes(PROMPT, saes=[sae])
+
+    for name in (alias, model._resolve_hook_name(alias)):
+        fired: list[str] = []
+        model.run_with_hooks(
+            PROMPT, fwd_hooks=[(name, lambda x, hook: fired.append(hook.name))]
+        )
+        assert fired, f"hook added via {name!r} didn't fire after the SAE was removed"
+    assert_close(model(PROMPT), logits_before)
