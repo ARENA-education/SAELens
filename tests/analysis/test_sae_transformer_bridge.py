@@ -4,11 +4,15 @@ These tests verify that SAETransformerBridge behaves identically to HookedSAETra
 for the functionality it supports.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 import torch
 from transformer_lens.hook_points import HookPoint
 
-from sae_lens.analysis.compat import has_transformer_bridge
+from sae_lens.analysis.compat import has_hooked_transformer, has_transformer_bridge
 
 if not has_transformer_bridge():
     pytest.skip(
@@ -16,13 +20,12 @@ if not has_transformer_bridge():
         allow_module_level=True,
     )
 
-from sae_lens.analysis.hooked_sae_transformer import (
-    HookedSAETransformer,
-    _SAEWrapper,
-    get_deep_attr,
-    set_deep_attr,
-)
+from transformer_lens.config import TransformerBridgeConfig
+
+if TYPE_CHECKING or has_hooked_transformer():
+    from sae_lens.analysis.hooked_sae_transformer import HookedSAETransformer
 from sae_lens.analysis.sae_transformer_bridge import SAETransformerBridge
+from sae_lens.analysis.sae_wrapper import _SAEWrapper, get_deep_attr, set_deep_attr
 from sae_lens.saes.sae import SAEMetadata
 from sae_lens.saes.standard_sae import StandardSAE, StandardSAEConfig
 from sae_lens.saes.transcoder import Transcoder, TranscoderConfig
@@ -52,6 +55,8 @@ def make_sae(d_model: int, act_name: str) -> StandardSAE:
 
 @pytest.fixture(scope="module")
 def hooked_model():
+    if not has_hooked_transformer():
+        pytest.skip("HookedTransformer was removed in transformer-lens 4.0")
     # Use from_pretrained_no_processing to match TransformerBridge behavior
     model = HookedSAETransformer.from_pretrained_no_processing(MODEL, device="cpu")
     yield model
@@ -394,6 +399,23 @@ def test_hook_dict_includes_sae_hooks_when_attached(
     assert "blocks.0.mlp.hook_out.hook_sae_output" in hook_dict
 
     bridge_model.reset_saes()
+
+
+def test_add_sae_keeps_hook_registry_values_as_hook_points(
+    bridge_model: SAETransformerBridge,
+) -> None:
+    # TransformerBridge calls HookPoint methods on every registry value, e.g. to
+    # remove hooks at the end of run_with_cache in transformer-lens v4
+    sae = make_sae(bridge_model.cfg.d_model, "blocks.0.hook_mlp_out")
+    bridge_model.add_sae(sae)
+
+    assert all(
+        isinstance(hook, HookPoint) for hook in bridge_model._hook_registry.values()
+    )
+    # the hook point replaced by the SAE is hidden until the SAE is removed
+    assert "blocks.0.mlp.hook_out" not in bridge_model.hook_dict
+    bridge_model.reset_saes()
+    assert "blocks.0.mlp.hook_out" in bridge_model.hook_dict
 
 
 def test_sae_activations_same_regardless_of_use_error_term(
@@ -1072,3 +1094,45 @@ def test_reset_sae_preserves_user_disabled_hook_z_reshaping(
     bridge_model._reset_sae(hook_alias)
 
     assert sae.hook_z_reshaping_mode is False
+
+
+def test_hooks_added_by_alias_fire_after_sae_is_removed() -> None:
+    # With compatibility mode, TransformerLens hook names (e.g. blocks.0.hook_mlp_out) are aliases
+    # for the bridge's HookPoints. Removing an SAE used to install a new, differently-named HookPoint,
+    # so hooks added through the alias afterwards were attached to nothing and silently never fired.
+    model = SAETransformerBridge.boot_transformers(MODEL, device="cpu")
+    model.enable_compatibility_mode(disable_warnings=True)
+    alias = "blocks.0.hook_mlp_out"
+    sae = make_sae(model.cfg.d_model, alias)
+    logits_before = model(PROMPT)
+
+    model.run_with_saes(PROMPT, saes=[sae])
+
+    for name in (alias, model._resolve_hook_name(alias)):
+        fired: list[str] = []
+        model.run_with_hooks(
+            PROMPT, fwd_hooks=[(name, lambda _x, hook: fired.append(hook.name))]
+        )
+        assert fired, f"hook added via {name!r} didn't fire after the SAE was removed"
+    assert_close(model(PROMPT), logits_before)
+
+
+def test_boot_native_returns_sae_transformer_bridge() -> None:
+    cfg = TransformerBridgeConfig(
+        d_model=16,
+        d_head=4,
+        n_heads=4,
+        d_mlp=32,
+        n_layers=1,
+        n_ctx=8,
+        d_vocab=10,
+        act_fn="relu",
+    )
+    model = SAETransformerBridge.boot_native(cfg, device="cpu")
+    assert isinstance(model, SAETransformerBridge)
+    sae = make_sae(model.cfg.d_model, "blocks.0.hook_resid_pre")
+    _, cache = model.run_with_cache_with_saes(torch.tensor([[1, 2, 3]]), saes=[sae])
+    assert_close(
+        cache[model.get_sae_hook_name(sae)],
+        sae.encode(cache[model.get_sae_hook_name(sae, "hook_sae_input")]),
+    )
