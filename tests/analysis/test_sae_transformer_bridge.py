@@ -1089,7 +1089,7 @@ def test_hooks_added_by_alias_fire_after_sae_is_removed() -> None:
     for name in (alias, model._resolve_hook_name(alias)):
         fired: list[str] = []
         model.run_with_hooks(
-            PROMPT, fwd_hooks=[(name, lambda x, hook: fired.append(hook.name))]
+            PROMPT, fwd_hooks=[(name, lambda _x, hook: fired.append(hook.name))]
         )
         assert fired, f"hook added via {name!r} didn't fire after the SAE was removed"
     assert_close(model(PROMPT), logits_before)
