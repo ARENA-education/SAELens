@@ -257,10 +257,21 @@ class SAETransformerBridge(TransformerBridge):  # type: ignore[misc,no-untyped-c
         ):
             sae.turn_on_forward_pass_hook_z_reshaping()
 
-        # Reset output hook location
-        new_hook = HookPoint()
-        new_hook.name = output_hook
+        # Reset output hook location. add_sae left the replaced HookPoint in _hook_registry, and on
+        # transformer-lens 4 the hook aliases (e.g. blocks.5.attn.hook_z for blocks.5.attn.o.hook_in)
+        # are registry entries pointing at that same object, so we put the original back. Installing
+        # a fresh HookPoint would leave the aliases pointing at a HookPoint that's no longer in the
+        # forward pass, and hooks added through them would silently never fire.
+        # Setting the module attribute renames the HookPoint to the bare attribute name (e.g.
+        # "hook_in"), and transformer-lens 4 builds its alias map from HookPoint names, so we
+        # restore the name afterwards.
+        original_hook = self._hook_registry.get(output_hook)
+        if isinstance(original_hook, HookPoint):
+            new_hook, hook_point_name = original_hook, original_hook.name
+        else:
+            new_hook, hook_point_name = HookPoint(), output_hook
         set_deep_attr(self, output_hook, new_hook)
+        new_hook.name = hook_point_name
         self._hook_registry[output_hook] = new_hook
 
         del self._acts_to_saes[act_name]
