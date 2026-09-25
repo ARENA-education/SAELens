@@ -244,11 +244,32 @@ class SAETransformerBridge(TransformerBridge):  # type: ignore[misc,no-untyped-c
         ):
             sae.turn_on_forward_pass_hook_z_reshaping()
 
-        # Reset output hook location
-        new_hook = HookPoint()
-        new_hook.name = output_hook
+        # Reset output hook location. We put back the HookPoint the SAE replaced, rather than a new
+        # one: hook aliases (e.g. blocks.0.hook_mlp_out for blocks.0.mlp.hook_out) are registry
+        # entries pointing at that object, and TransformerBridge resolves them through its name, so
+        # with a new HookPoint hooks added through an alias would silently never fire. Depending on
+        # the version, add_sae left the original either at output_hook or only under its aliases.
+        alias_keys = [
+            key
+            for key, value in self._hook_registry.items()
+            if key != output_hook
+            and isinstance(value, HookPoint)
+            and self._resolve_hook_name(key) == output_hook
+        ]
+        original_hook = self._hook_registry.get(output_hook)
+        if not isinstance(original_hook, HookPoint) and alias_keys:
+            original_hook = self._hook_registry[alias_keys[0]]
+        if isinstance(original_hook, HookPoint):
+            new_hook, hook_point_name = original_hook, original_hook.name
+        else:
+            new_hook, hook_point_name = HookPoint(), output_hook
+        # Setting the module attribute renames the HookPoint to the bare attribute name (e.g.
+        # "hook_out"), so restore its name afterwards.
         set_deep_attr(self, output_hook, new_hook)
+        new_hook.name = hook_point_name
         self._hook_registry[output_hook] = new_hook
+        for key in alias_keys:
+            self._hook_registry[key] = new_hook
 
         del self._acts_to_saes[act_name]
 
