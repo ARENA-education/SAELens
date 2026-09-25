@@ -16,6 +16,8 @@ if not has_transformer_bridge():
         allow_module_level=True,
     )
 
+from transformer_lens.config import TransformerBridgeConfig
+
 from sae_lens.analysis.hooked_sae_transformer import (
     HookedSAETransformer,
     _SAEWrapper,
@@ -1072,3 +1074,24 @@ def test_reset_sae_preserves_user_disabled_hook_z_reshaping(
     bridge_model._reset_sae(hook_alias)
 
     assert sae.hook_z_reshaping_mode is False
+
+
+def test_boot_native_returns_sae_transformer_bridge() -> None:
+    cfg = TransformerBridgeConfig(
+        d_model=16,
+        d_head=4,
+        n_heads=4,
+        d_mlp=32,
+        n_layers=1,
+        n_ctx=8,
+        d_vocab=10,
+        act_fn="relu",
+    )
+    model = SAETransformerBridge.boot_native(cfg, device="cpu")
+    assert isinstance(model, SAETransformerBridge)
+    sae = make_sae(model.cfg.d_model, "blocks.0.hook_resid_pre")
+    _, cache = model.run_with_cache_with_saes(torch.tensor([[1, 2, 3]]), saes=[sae])
+    assert_close(
+        cache[model.get_sae_hook_name(sae)],
+        sae.encode(cache[model.get_sae_hook_name(sae, "hook_sae_input")]),
+    )
