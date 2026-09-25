@@ -265,7 +265,7 @@ logits, cache = model.run_with_cache_with_saes("Hello, world!", saes=[sae])
 - Gemma 3 (all sizes)
 - Other HuggingFace models not natively supported by HookedTransformer
 
-For models supported by both HookedTransformer and TransformerBridge (like GPT-2, Gemma 2), prefer `HookedSAETransformer` as it has more mature support, if you are using `transformer-lens<4.0`.
+For models supported by both HookedTransformer and TransformerBridge (like GPT-2, Gemma 2), prefer `HookedSAETransformer` as it has more mature support.
 
 ## Using SAEs Without TransformerLens
 

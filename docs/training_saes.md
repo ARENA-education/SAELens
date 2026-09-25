@@ -554,9 +554,9 @@ The learning rate scheduler can be controlled with the `lr_scheduler_name` param
 
 To avoid dead features, it's often helpful to slowly increase the L1 penalty. This can be done by setting `l1_warm_up_steps` to a value larger than 0. This will linearly increase the L1 penalty over the first `l1_warm_up_steps` training steps.
 
-## Training with TransformerLens 4.0
+## Training with TransformerBridge
 
-TransformerLens 4.0 removed `HookedTransformer`, which is the default `model_class_name`. With `transformer-lens>=4.0`, set `model_class_name = 'TransformerBridge'` to load the model as a TransformerLens `TransformerBridge` instead. TransformerLens hook names such as `hook_name = 'blocks.1.hook_resid_post'` work as before. The bridge uses the unprocessed Hugging Face weights, like `HookedTransformer.from_pretrained_no_processing`, and `model_from_pretrained_kwargs` are passed to `TransformerBridge.boot_transformers`.
+Set `model_class_name = 'TransformerBridge'` to load the model as a TransformerLens `TransformerBridge` instead of a `HookedTransformer`. This requires transformer-lens 3.0 or later. TransformerBridge is the replacement for `HookedTransformer`, which TransformerLens 4.0 removed. TransformerLens hook names such as `hook_name = 'blocks.1.hook_resid_post'` work as before. The bridge uses the unprocessed Hugging Face weights, like `HookedTransformer.from_pretrained_no_processing`, and `model_from_pretrained_kwargs` are passed to `TransformerBridge.boot_transformers`.
 
 ## Training on Huggingface Models
 
